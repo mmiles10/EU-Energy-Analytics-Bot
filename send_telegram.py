@@ -1,11 +1,16 @@
+import os
 import requests
 import json
+from dotenv import load_dotenv
 
-# Your bot token
-TOKEN = "8482245238:AAE3xoevSzXoKpydteYBMcRkeYXZbge3ypM"
+load_dotenv()
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 def get_chat_id():
     """Get your chat ID from recent messages."""
+    if not TOKEN:
+        print("❌ TELEGRAM_TOKEN not set in environment")
+        return None
     url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
     
     try:
@@ -38,6 +43,9 @@ def get_chat_id():
 
 def send_message(chat_id, message):
     """Send a message to your phone."""
+    if not TOKEN:
+        print("❌ TELEGRAM_TOKEN not set in environment")
+        return False
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     
     data = {

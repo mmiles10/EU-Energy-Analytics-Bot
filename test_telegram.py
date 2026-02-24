@@ -1,13 +1,18 @@
+import os
 import requests
 import json
 from datetime import datetime
+from dotenv import load_dotenv
 
-# Your bot token and chat ID
-TOKEN = "8482245238:AAE3xoevSzXoKpydteYBMcRkeYXZbge3ypM"
-CHAT_ID = "8466265605"
+load_dotenv()
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 def send_message(message):
     """Send a message to your phone."""
+    if not TOKEN or not CHAT_ID:
+        print("❌ TELEGRAM_TOKEN or TELEGRAM_CHAT_ID not set in environment")
+        return False
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     
     data = {

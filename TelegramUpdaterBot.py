@@ -8,16 +8,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
 from entsoe import EntsoePandasClient
-from config import ENTSOE_API_KEY
 
 load_dotenv()
 
 # Telegram configuration
-TOKEN = os.getenv("TELEGRAM_TOKEN", "8482245238:AAE3xoevSzXoKpydteYBMcRkeYXZbge3ypM")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "8466265605")  # Fixed typo: was "ItD", using default from test_telegram.py
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # ENTSOE configuration
-API_KEY = os.getenv("ENTSOE_API_KEY", ENTSOE_API_KEY)
+API_KEY = os.getenv("ENTSOE_API_KEY")
 # Use country code (e.g., 'AT' for Austria) instead of zonal domain for better compatibility
 COUNTRY_CODE = os.getenv("COUNTRY_CODE", "AT")  # Austria - change to 'BE', 'FR', 'DE', 'NL', etc.
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_SEC", "300"))
@@ -114,6 +113,8 @@ def get_country_selection():
     return primary, from_country, to_country
 
 def send_telegram(text: str, parse_mode="HTML"):
+    if not TOKEN or not CHAT_ID:
+        raise RuntimeError("Missing TELEGRAM_TOKEN or TELEGRAM_CHAT_ID in environment")
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": parse_mode}
     r = requests.post(url, json=payload, timeout=15)
@@ -121,6 +122,8 @@ def send_telegram(text: str, parse_mode="HTML"):
 
 def send_photo(photo_path: str, caption: str = ""):
     """Send a photo to Telegram."""
+    if not TOKEN or not CHAT_ID:
+        raise RuntimeError("Missing TELEGRAM_TOKEN or TELEGRAM_CHAT_ID in environment")
     url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
     with open(photo_path, 'rb') as photo:
         files = {'photo': photo}
@@ -329,8 +332,11 @@ def generate_charts(prices, load, flows, primary_country, from_country, to_count
         return False
 
 def main(primary_country, from_country, to_country):
-    if not CHAT_ID:
-        print("Error: TELEGRAM_CHAT_ID not set. Please set it in your .env file or environment.")
+    if not API_KEY:
+        print("Error: ENTSOE_API_KEY not set. Please set it in your .env file or environment.")
+        return
+    if not CHAT_ID or not TOKEN:
+        print("Error: TELEGRAM_TOKEN and TELEGRAM_CHAT_ID must be set in your .env or environment.")
         print("You can get your chat ID by running: python send_telegram.py")
         return
     

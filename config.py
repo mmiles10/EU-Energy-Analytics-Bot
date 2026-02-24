@@ -1,15 +1,13 @@
-"""
-Configuration file for API keys and sensitive settings.
-Keep this file secure and never commit it to version control.
+"""Deprecated local config module.
+
+Use environment variables instead of hardcoded secrets.
+This file is kept only for backward compatibility with older imports.
 """
 
-# Trading API Keys
-# ENTSOE API Key (get from https://transparency.entsoe.eu/)
-ENTSOE_API_KEY = "33e512f8-02ed-44a4-baab-c847b0e7381f"
+import os
 
-# ENTSOE API Base URL
+# ENTSOE API key should come from environment or .env
+ENTSOE_API_KEY = os.getenv("ENTSOE_API_KEY")
+
+# ENTSOE API Base URL (non-secret)
 ENTSOE_BASE_URL = "https://web-api.tp.entsoe.eu/api"
-
-
-# Example usage in your main.py:
-# from config import BINANCE_API_KEY, BINANCE_SECRET_KEY

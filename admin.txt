@@ -1,2 +1,13 @@
 useful links:
-- 
+- epex spot: https://www.epexspot.com/en
+- eex: https://www.eex.com
+- ensto-e transparency: https://newtransparency.entsoe.eu/
+- entsoe-e python wrapper docs: https://github.com/EnergieID/entsoe-py
+- postman API Keys: https://documenter.getpostman.com/view/7009892/2s93JtP3F6
+entsoe API: 33e512f8-02ed-44a4-baab-c847b0e7381f
+
+
+Telegram Bot Information: 
+Bot Name: EnergyTrading
+Bot Username: trading_updater_bot
+Bot API Key: [REVOKED - USE TELEGRAM_TOKEN ENV VAR]

@@ -1,6 +1,6 @@
+import os
 from entsoe import EntsoePandasClient
 import pandas as pd
-from config import ENTSOE_API_KEY
 from datetime import datetime
 import matplotlib.pyplot as plt
 
@@ -107,7 +107,11 @@ def main():
     country_code, country_code_from, country_code_to = get_country_selection()
     
     # Initialize the ENTSOE pandas client
-    client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
+    entsoe_api_key = os.getenv("ENTSOE_API_KEY")
+    if not entsoe_api_key:
+        print("Error: ENTSOE_API_KEY not set in environment")
+        return
+    client = EntsoePandasClient(api_key=entsoe_api_key)
     
     # Set up date range - using current dates for fresh data
     now = pd.Timestamp.now(tz='Europe/Brussels')
@@ -357,7 +361,10 @@ def get_telegram_updates():
     import requests
     import json
     
-    TOKEN = "8482245238:AAE3xoevSzXoKpydteYBMcRkeYXZbge3ypM"  # Your bot token
+    TOKEN = os.getenv("TELEGRAM_TOKEN")
+    if not TOKEN:
+        print("❌ TELEGRAM_TOKEN not set in environment")
+        return None
     url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
     
     try:

@@ -1,7 +1,11 @@
+import os
 import requests
 import json
 import time
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class TelegramBot:
     def __init__(self, token):
@@ -98,11 +102,13 @@ class TelegramBot:
         return self.send_message(chat_id, alert_message)
 
 def main():
-    # Your bot token
-    TOKEN = "8482245238:AAE3xoevSzXoKpydteYBMcRkeYXZbge3ypM"
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
+        print("❌ TELEGRAM_TOKEN not set in environment")
+        return
     
     # Create bot instance
-    bot = TelegramBot(TOKEN)
+    bot = TelegramBot(token)
     
     print("🤖 Telegram Bot Setup")
     print("=" * 40)
