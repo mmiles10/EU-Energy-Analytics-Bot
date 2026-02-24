@@ -4,6 +4,94 @@ from config import ENTSOE_API_KEY
 from datetime import datetime
 import matplotlib.pyplot as plt
 
+def get_country_selection():
+    """Interactive prompt for country selection."""
+    print("\n" + "="*50)
+    print("COUNTRY SELECTION")
+    print("="*50)
+    
+    # ENTSOE-accepted country codes
+    countries = {
+        # Standard ISO codes
+        'AT': 'Austria',
+        'BE': 'Belgium',
+        'CH': 'Switzerland',
+        'DE': 'Germany',
+        'FR': 'France',
+        'NL': 'Netherlands',
+        'IT': 'Italy',
+        'ES': 'Spain',
+        'PT': 'Portugal',
+        'PL': 'Poland',
+        'CZ': 'Czech Republic',
+        'DK': 'Denmark',
+        'SE': 'Sweden',
+        'NO': 'Norway',
+        'FI': 'Finland',
+        'IE': 'Ireland',
+        'GB': 'Great Britain',
+        'GR': 'Greece',
+        # Special combined codes
+        'DE_LU': 'Germany-Luxembourg',
+        'IT_SACODC': 'Italy (SACODC)',
+        'IT_SACOAC': 'Italy (SACOAC)',
+        'IT_BRNN': 'Italy (BRNN)',
+        'IT_CNOR': 'Italy (CNOR)',
+        'IT_CSUD': 'Italy (CSUD)',
+        'IT_FOGN': 'Italy (FOGN)',
+        'IT_GR': 'Italy (GR)',
+        'IT_MACRO': 'Italy (MACRO)',
+        'IT_MALTA': 'Italy (MALTA)',
+        'IT_NORD': 'Italy (NORD)',
+        'IT_PRGP': 'Italy (PRGP)',
+        'IT_ROSN': 'Italy (ROSN)',
+        'IT_SARD': 'Italy (SARD)',
+        'IT_SICI': 'Italy (SICI)',
+        'IT_SUD': 'Italy (SUD)',
+    }
+    
+    # Primary market country
+    print("\n1. PRIMARY MARKET (for prices, load, generation):")
+    print("Enter country code (e.g., AT, DE, FR, DE_LU):")
+    print("Common codes: AT=Austria, DE=Germany, FR=France, CH=Switzerland")
+    
+    primary = input("Country code (default: AT): ").strip().upper() or "AT"
+    
+    # Validate and show name if recognized
+    if primary in countries:
+        print(f"✓ Selected: {countries[primary]}")
+    else:
+        print(f"⚠️  '{primary}' not in common list, but will try anyway")
+        print("   (Make sure it's a valid ENTSOE country code)")
+    
+    # Cross-border flow countries
+    print("\n2. CROSS-BORDER FLOWS:")
+    print("Enter source country (energy flows FROM):")
+    print("Common codes: CH=Switzerland, DE=Germany, FR=France, AT=Austria")
+    
+    from_country = input("From country code (default: CH): ").strip().upper() or "CH"
+    if from_country in countries:
+        print(f"✓ Selected: {countries[from_country]}")
+    else:
+        print(f"⚠️  '{from_country}' not in common list, but will try anyway")
+    
+    print("\nEnter destination country (energy flows TO):")
+    print("Common codes: DE_LU=Germany-Luxembourg, DE=Germany, FR=France")
+    
+    to_country = input("To country code (default: DE_LU): ").strip().upper() or "DE_LU"
+    if to_country in countries:
+        print(f"✓ Selected: {countries[to_country]}")
+    else:
+        print(f"⚠️  '{to_country}' not in common list, but will try anyway")
+    
+    print("\n" + "="*50)
+    print(f"Configuration:")
+    print(f"  Primary Market: {countries.get(primary, primary)} ({primary})")
+    print(f"  Cross-Border Flow: {countries.get(from_country, from_country)} → {countries.get(to_country, to_country)}")
+    print("="*50 + "\n")
+    
+    return primary, from_country, to_country
+
 def main():
     """Main function to run the energy trading application."""
     print("Energy Trading Application Started")
@@ -15,16 +103,16 @@ def main():
     print("- ENTSOE Python Docs: https://github.com/EnergieID/entsoe-py")
     print("=" * 50)
     
+    # Get country selection from user
+    country_code, country_code_from, country_code_to = get_country_selection()
+    
     # Initialize the ENTSOE pandas client
     client = EntsoePandasClient(api_key=ENTSOE_API_KEY)
     
-    # Set up date range and countries - using current dates for fresh data
+    # Set up date range - using current dates for fresh data
     now = pd.Timestamp.now(tz='Europe/Brussels')
     start = now - pd.Timedelta(days=1)  # Yesterday
     end = now  # Current time
-    country_code = 'AT'  # Austria
-    country_code_from = 'CH'  # Switzerland
-    country_code_to = 'DE_LU'  # Germany-Luxembourg
     
     print(f"Querying ENTSOE data for {country_code} from {start} to {end}")
     
@@ -82,8 +170,8 @@ def main():
         print("- load_data.csv")
         print("- crossborder_flows.csv")
         
-        # Generate charts
-        generate_charts()
+        # Generate charts with country information
+        generate_charts(country_code, country_code_from, country_code_to)
         
         # Perform data analytics
         from EnergyAnalysis import main_analysis
@@ -97,16 +185,36 @@ def main():
         print("2. Verify your ENTSOE account is active")
         print("3. Check the ENTSOE documentation: https://github.com/EnergieID/entsoe-py")
 
-def generate_charts():
-    """Generate charts from the CSV data."""
+def generate_charts(primary_country, from_country, to_country):
+    """Generate charts from the CSV data with country information."""
     print("\nGenerating charts...")
+    
+    # Country name mapping
+    country_names = {
+        'AT': 'Austria', 'BE': 'Belgium', 'CH': 'Switzerland',
+        'DE': 'Germany', 'DE_LU': 'Germany-Luxembourg', 'FR': 'France',
+        'NL': 'Netherlands', 'IT': 'Italy', 'ES': 'Spain',
+        'PT': 'Portugal', 'PL': 'Poland', 'CZ': 'Czech Republic',
+        'DK': 'Denmark', 'SE': 'Sweden', 'NO': 'Norway',
+        'FI': 'Finland', 'IE': 'Ireland', 'GB': 'Great Britain',
+        'GR': 'Greece'
+    }
+    
+    primary_name = country_names.get(primary_country, primary_country)
+    from_name = country_names.get(from_country, from_country)
+    to_name = country_names.get(to_country, to_country)
     
     try:
         # Day-ahead prices
         print("Creating day-ahead prices chart...")
         prices = pd.read_csv("day_ahead_prices.csv", index_col=0, parse_dates=True)
-        prices.plot(title="Day-Ahead Prices (EUR/MWh)")
-        plt.ylabel("EUR/MWh")
+        fig, ax = plt.subplots(figsize=(12, 6))
+        prices.plot(ax=ax)
+        title = f"Day-Ahead Prices - {primary_name} ({primary_country})"
+        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.set_ylabel("EUR/MWh", fontsize=12)
+        ax.set_xlabel("Time", fontsize=12)
+        ax.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig("chart_day_ahead_prices.png", dpi=150)
         plt.close()
@@ -115,8 +223,13 @@ def generate_charts():
         # Load
         print("Creating load chart...")
         load = pd.read_csv("load_data.csv", index_col=0, parse_dates=True)
-        load.plot(title="System Load (MW)")
-        plt.ylabel("MW")
+        fig, ax = plt.subplots(figsize=(12, 6))
+        load.plot(ax=ax)
+        title = f"System Load - {primary_name} ({primary_country})"
+        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.set_ylabel("MW", fontsize=12)
+        ax.set_xlabel("Time", fontsize=12)
+        ax.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig("chart_load.png", dpi=150)
         plt.close()
@@ -125,8 +238,15 @@ def generate_charts():
         # Cross-border flows
         print("Creating cross-border flows chart...")
         flows = pd.read_csv("crossborder_flows.csv", index_col=0, parse_dates=True)
-        flows.plot(title="Cross-Border Flows (MW)")
-        plt.ylabel("MW (positive = export from first zone)")
+        fig, ax = plt.subplots(figsize=(12, 6))
+        flows.plot(ax=ax)
+        title = f"Cross-Border Flows - {from_name} ({from_country}) → {to_name} ({to_country})"
+        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.set_ylabel(f"MW (positive = export from {from_name})", fontsize=12)
+        ax.set_xlabel("Time", fontsize=12)
+        ax.axhline(y=0, color='r', linestyle='--', alpha=0.5, label='Zero flow')
+        ax.grid(True, alpha=0.3)
+        ax.legend()
         plt.tight_layout()
         plt.savefig("chart_crossborder_flows.png", dpi=150)
         plt.close()
@@ -140,8 +260,13 @@ def generate_charts():
         gen = gen.set_index(ts_col)
         gen_actual = gen[[c for c in gen.columns if "Actual Aggregated" in str(c)]].copy()
         gen_actual.columns = [c[0] for c in gen_actual.columns]
-        gen_actual.plot.area(title="Generation Mix – Actual Aggregated (MW)")
-        plt.ylabel("MW")
+        fig, ax = plt.subplots(figsize=(12, 6))
+        gen_actual.plot.area(ax=ax)
+        title = f"Generation Mix - {primary_name} ({primary_country})"
+        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.set_ylabel("MW", fontsize=12)
+        ax.set_xlabel("Time", fontsize=12)
+        ax.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig("chart_generation_mix.png", dpi=150)
         plt.close()
