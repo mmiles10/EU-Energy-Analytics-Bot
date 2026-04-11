@@ -22,7 +22,8 @@ COUNTRY_CODE = os.getenv("COUNTRY_CODE", "AT")  # Austria - change to 'BE', 'FR'
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_SEC", "300"))
 STATE_PATH = Path("last_price_state.json")
 
-client = EntsoePandasClient(api_key=API_KEY)
+# Lazy-init: avoid crash at import when ENTSOE_API_KEY is missing (e.g. no .env yet).
+client = None
 
 def get_country_selection():
     """Interactive prompt for country selection."""
@@ -133,6 +134,13 @@ def send_photo(photo_path: str, caption: str = ""):
 
 def fetch_energy_data(primary_country, from_country, to_country):
     """Fetch all energy data from ENTSOE API."""
+    global client
+    if not API_KEY:
+        print("Error: ENTSOE_API_KEY not set. Please set it in your .env file or environment.")
+        return None, None, None
+    if client is None:
+        client = EntsoePandasClient(api_key=API_KEY)
+
     now = pd.Timestamp.now(tz='Europe/Brussels')
     start = (now - pd.Timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     end = now

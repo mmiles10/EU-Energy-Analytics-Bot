@@ -2,3 +2,8 @@
 *.pyc
 __pycache__/
 .DS_Store
+
+# Local / vendored — do not publish
+LegacyTerminal/
+last_price_state.json
+INTERVIEW_TALKING_POINTS.md
