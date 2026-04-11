@@ -159,10 +159,10 @@ def main():
         print("3. Run this script again")
         
         # Show how to find the bot
-        print(f"\n🔍 To find your bot:")
-        print(f"1. Open Telegram")
-        print(f"2. Search for your bot using the token")
-        print(f"3. Or use this link: https://t.me/your_bot_username")
+        print("\n🔍 To find your bot:")
+        print("1. Open Telegram")
+        print("2. Search by the bot username from BotFather (e.g. @your_bot_name)—never share or paste your token")
+        print("3. Or open t.me/<username> from the BotFather setup message")
 
 if __name__ == "__main__":
     main()

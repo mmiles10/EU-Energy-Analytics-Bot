@@ -7,3 +7,7 @@ __pycache__/
 LegacyTerminal/
 last_price_state.json
 INTERVIEW_TALKING_POINTS.md
+
+# Personal notes — never store API keys or tokens in tracked files
+admin.txt
+admin.local.txt

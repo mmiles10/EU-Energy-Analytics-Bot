@@ -1,8 +1,11 @@
 import os
+from dotenv import load_dotenv
 from entsoe import EntsoePandasClient
 import pandas as pd
 from datetime import datetime
 import matplotlib.pyplot as plt
+
+load_dotenv()
 
 def get_country_selection():
     """Interactive prompt for country selection."""

@@ -24,12 +24,12 @@ Key Components:
 Data Flow:
 ENTSOE API → Raw Data → CSV Files → Charts → Analytics → Telegram
 
-2. CONFIGURATION (config.py)
-Purpose: Centralized configuration management
+2. CONFIGURATION (config.py + .env)
+Purpose: Non-secret defaults and env-based API access
 Contains:
-- ENTSOE_API_KEY: Your API authentication key
-- ENTSOE_BASE_URL: API endpoint URL
-- Security: File is gitignored to protect credentials
+- ENTSOE_API_KEY: Read from environment / .env (never hardcode in this file)
+- ENTSOE_BASE_URL: API endpoint URL (non-secret)
+- Security: Real credentials only in .env (gitignored); see .env.example
 
 3. DATA ANALYTICS (EnergyAnalysis.py)
 Purpose: Comprehensive data analysis and insights
@@ -113,13 +113,14 @@ FILE STRUCTURE
 --------------
 trading/
 ├── main.py                    # Main data pipeline
-├── config.py                  # Configuration & API keys
+├── config.py                  # Reads ENTSOE_API_KEY from environment
 ├── EnergyAnalysis.py          # Analytics engine
 ├── telegram_bot.py           # Full Telegram bot
 ├── send_telegram.py          # Simple Telegram sender
 ├── test_telegram.py          # Connection tester
 ├── send_energy_report.py     # Energy report sender
-├── admin.txt                 # Useful links
+├── reference-links.md        # Public reference URLs (no secrets)
+├── SECURITY.md               # Secret handling and rotation
 ├── *.csv                     # Data files
 ├── *.png                     # Chart files
 └── __pycache__/             # Python cache
@@ -129,10 +130,12 @@ HOW TO USE THE SYSTEM
 
 1. INITIAL SETUP
 # Install dependencies
-pip install entsoe-py pandas matplotlib requests
+pip install entsoe-py pandas matplotlib requests python-dotenv
 
-# Configure API key in config.py
-ENTSOE_API_KEY = "your_api_key_here"
+# Configure secrets in .env (copy from .env.example)
+# ENTSOE_API_KEY=...
+# TELEGRAM_TOKEN=...
+# TELEGRAM_CHAT_ID=...
 
 2. RUN COMPLETE PIPELINE
 python3 main.py
@@ -213,16 +216,16 @@ TROUBLESHOOTING
 
 Common Issues:
 1. Import Errors: Install missing packages
-2. API Errors: Check ENTSOE_API_KEY in config.py
-3. Telegram Issues: Verify bot token and chat ID
+2. API Errors: Check ENTSOE_API_KEY is set in .env or the environment (never commit real keys)
+3. Telegram Issues: Verify TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in .env
 4. Data Issues: Ensure CSV files exist before analytics
 
 Debug Commands:
 # Test imports
 python3 -c "import entsoe, pandas, matplotlib, requests"
 
-# Test API connection
-python3 -c "from config import ENTSOE_API_KEY; print('API Key loaded')"
+# Test API key is present (does not print the secret)
+python3 -c "import os; from dotenv import load_dotenv; load_dotenv(); print('ENTSOE_API_KEY set:', bool(os.getenv('ENTSOE_API_KEY')))"
 
 # Test Telegram
 python3 test_telegram.py
@@ -238,14 +241,14 @@ EXTENSION POSSIBILITIES
 
 SECURITY NOTES
 --------------
-- API keys stored in config.py (gitignored)
-- Telegram bot token should be kept secure
-- Chat ID is user-specific
-- No sensitive data in version control
+- Secrets live only in .env (gitignored); see .env.example for variable names
+- config.py reads ENTSOE_API_KEY via os.getenv — it does not store secrets in the file
+- Telegram bot token and chat ID must never be committed; see SECURITY.md
+- Use reference-links.md for public URLs; do not put keys in tracked notes files
 
 SUPPORT RESOURCES
 -----------------
 - ENTSOE Documentation: https://github.com/EnergieID/entsoe-py
 - Telegram Bot API: https://core.telegram.org/bots/api
-- Energy Trading Resources: admin.txt
+- Energy Trading Resources: reference-links.md
 - Python Documentation: Standard library docs
