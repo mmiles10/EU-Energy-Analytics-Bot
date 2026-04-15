@@ -22,6 +22,8 @@ The pipeline generates:
 - `main.py` fetches data and writes output files
 - `EnergyAnalysis.py` runs the analysis step
 - `send_energy_report.py` formats and sends a report through Telegram
+- `docs/` contains reference notes for the project
+- `examples/outputs/` contains sample charts and data files
 
 ## Setup
 

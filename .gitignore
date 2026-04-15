@@ -1,14 +1,14 @@
 .env
-*.pyc
 __pycache__/
-.DS_Store
 
-# Local / vendored — do not publish
-EnergyScraper.py
-LegacyTerminal/
-last_price_state.json
-INTERVIEW_TALKING_POINTS.md
+day_ahead_prices.csv
+generation_data.csv
+load_data.csv
+crossborder_flows.csv
+day_ahead_prices.txt
+day_ahead_prices_raw.xml
 
-# Personal notes — never store API keys or tokens in tracked files
-admin.txt
-admin.local.txt
+chart_day_ahead_prices.png
+chart_load.png
+chart_crossborder_flows.png
+chart_generation_mix.png
