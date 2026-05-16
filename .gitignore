@@ -1,6 +1,10 @@
 .env
 __pycache__/
 
+# Personal notes — never store API keys or tokens in tracked files
+admin.txt
+admin.local.txt
+
 day_ahead_prices.csv
 generation_data.csv
 load_data.csv
