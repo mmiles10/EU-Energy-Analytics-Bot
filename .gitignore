@@ -12,3 +12,7 @@ chart_day_ahead_prices.png
 chart_load.png
 chart_crossborder_flows.png
 chart_generation_mix.png
+
+# Personal notes - never store API keys or tokens in tracked files
+admin.txt
+admin.local.txt
