@@ -392,7 +392,7 @@ def main(primary_country, from_country, to_country):
         if should_send:
             # Generate charts
             print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            all_messages_sent = generate_charts(prices, load, flows, primary_country, from_country, to_country)
             
             # Send text report first
             send_telegram(report, parse_mode="HTML")
@@ -412,12 +412,17 @@ def main(primary_country, from_country, to_country):
                         send_photo(str(chart_path), caption)
                         print(f"✅ Sent {chart_file} to Telegram")
                     except Exception as e:
+                        all_messages_sent = False
                         print(f"⚠️  Failed to send {chart_file}: {e}")
                 else:
+                    all_messages_sent = False
                     print(f"⚠️  Chart not found: {chart_path}")
             
-            save_state({"price": latest_price, "ts": latest_ts})
-            print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
+            if all_messages_sent:
+                save_state({"price": latest_price, "ts": latest_ts})
+                print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
+            else:
+                print("⚠️  Delivery incomplete; state not advanced so the update will retry")
     else:
         print("Failed to create report")
 

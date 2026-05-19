@@ -95,6 +95,47 @@ def get_country_selection():
     
     return primary, from_country, to_country
 
+def has_nonzero_flow(flows):
+    """Return True when an ENTSO-E flow series contains usable non-zero data."""
+    if flows is None:
+        return False
+    try:
+        flows = flows.dropna()
+    except AttributeError:
+        pass
+    if getattr(flows, "empty", False):
+        return False
+
+    max_abs = flows.abs().max()
+    if hasattr(max_abs, "max"):
+        max_abs = max_abs.max()
+    return pd.notna(max_abs) and max_abs != 0
+
+def fetch_crossborder_flows(client, from_country, to_country, start, end):
+    """Fetch flows from from_country to to_country, falling back to reverse data."""
+    direct_error = None
+    flows = None
+
+    try:
+        flows = client.query_crossborder_flows(from_country, to_country, start=start, end=end).dropna()
+        if has_nonzero_flow(flows):
+            return flows.astype(float)
+    except Exception as e:
+        direct_error = e
+
+    try:
+        reverse_flows = client.query_crossborder_flows(to_country, from_country, start=start, end=end).dropna()
+        if has_nonzero_flow(reverse_flows):
+            print("✓ Cross-border flow: using reverse direction (API publishes to→from)")
+            return -reverse_flows.astype(float)
+    except Exception:
+        if direct_error is not None:
+            raise direct_error
+
+    if flows is not None:
+        return flows.astype(float)
+    raise direct_error
+
 def main():
     """Main function to run the energy trading application."""
     print("Energy Trading Application Started")
@@ -160,7 +201,7 @@ def main():
         
         # Query cross-border flows (returns pandas Series)
         print("Fetching cross-border flows...")
-        flows = client.query_crossborder_flows(country_code_from, country_code_to, start=start, end=end)
+        flows = fetch_crossborder_flows(client, country_code_from, country_code_to, start, end)
         print("✓ Successfully retrieved cross-border flows data")
         print(f"Data type: {type(flows)}")
         print(f"Data shape: {flows.shape}")
@@ -292,72 +333,6 @@ def generate_charts(primary_country, from_country, to_country):
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-        # --- Chart generation section ---
-    import matplotlib.pyplot as plt
-
-    print("\nGenerating charts...")
-
-    # Day-ahead prices
-    prices = pd.read_csv("day_ahead_prices.csv", index_col=0, parse_dates=True)
-    prices.plot(title="Day-Ahead Prices (EUR/MWh)")
-    plt.ylabel("EUR/MWh")
-    plt.tight_layout()
-    plt.savefig("chart_day_ahead_prices.png", dpi=150)
-    plt.close()
-
-    # Load
-    load = pd.read_csv("load_data.csv", index_col=0, parse_dates=True)
-    load.plot(title="System Load (MW)")
-    plt.ylabel("MW")
-    plt.tight_layout()
-    plt.savefig("chart_load.png", dpi=150)
-    plt.close()
-
-    # Cross-border flows
-    flows = pd.read_csv("crossborder_flows.csv", index_col=0, parse_dates=True)
-    flows.plot(title="Cross-Border Flows (MW)")
-    plt.ylabel("MW (positive = export from first zone)")
-    plt.tight_layout()
-    plt.savefig("chart_crossborder_flows.png", dpi=150)
-    plt.close()
-
-    # Generation mix (stacked area)
-    print("Creating generation mix chart...")
-    try:
-        gen = pd.read_csv("generation_data.csv", header=[0, 1], index_col=0)
-        
-        # The first column is already the timestamp index, so we can use it directly
-        gen.index = pd.to_datetime(gen.index)
-        
-        # Get only the "Actual Aggregated" columns
-        gen_actual = gen[[c for c in gen.columns if "Actual Aggregated" in str(c)]].copy()
-        gen_actual.columns = [c[0] for c in gen_actual.columns]
-        
-        # Create the stacked area chart
-        gen_actual.plot.area(title="Generation Mix – Actual Aggregated (MW)")
-        plt.ylabel("MW")
-        plt.tight_layout()
-        plt.savefig("chart_generation_mix.png", dpi=150)
-        plt.close()
-        print("✓ Generation mix chart saved")
-        
-    except Exception as e:
-        print(f"⚠️ Could not create generation mix chart: {e}")
-        print("Other charts will still be created")
-
-    print("✓ Charts saved as:")
-    print("  - chart_day_ahead_prices.png")
-    print("  - chart_load.png")
-    print("  - chart_crossborder_flows.png")
-    print("  - chart_generation_mix.png")
 
 def get_telegram_updates():
     """Get updates from Telegram bot API."""
