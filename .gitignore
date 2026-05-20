@@ -1,5 +1,17 @@
 .env
+*.pyc
 __pycache__/
+.DS_Store
+
+# Local / vendored - do not publish
+EnergyScraper.py
+LegacyTerminal/
+last_price_state.json
+INTERVIEW_TALKING_POINTS.md
+
+# Personal notes — never store API keys or tokens in tracked files
+admin.txt
+admin.local.txt
 
 day_ahead_prices.csv
 generation_data.csv
