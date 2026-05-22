@@ -1,4 +1,9 @@
 .env
+admin.txt
+admin.local.txt
+last_price_state.json
+EnergyScraper.py
+LegacyTerminal/
 __pycache__/
 
 day_ahead_prices.csv
