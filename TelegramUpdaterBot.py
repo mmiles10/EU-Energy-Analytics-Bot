@@ -21,6 +21,11 @@ API_KEY = os.getenv("ENTSOE_API_KEY")
 COUNTRY_CODE = os.getenv("COUNTRY_CODE", "AT")  # Austria - change to 'BE', 'FR', 'DE', 'NL', etc.
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_SEC", "300"))
 STATE_PATH = Path("last_price_state.json")
+CHART_FILES = {
+    "prices": Path("chart_day_ahead_prices.png"),
+    "load": Path("chart_load.png"),
+    "flows": Path("chart_crossborder_flows.png"),
+}
 
 # Lazy-init: avoid crash at import when ENTSOE_API_KEY is missing (e.g. no .env yet).
 client = None
@@ -266,11 +271,27 @@ def create_comprehensive_report(prices, load, flows, primary_country, from_count
 
 def load_state():
     if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text())
+        try:
+            state = json.loads(STATE_PATH.read_text())
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"⚠️  Ignoring unreadable state file {STATE_PATH}: {e}")
+            return {}
+        if isinstance(state, dict):
+            return state
+        print(f"⚠️  Ignoring invalid state file {STATE_PATH}: expected object")
     return {}
 
 def save_state(state):
-    STATE_PATH.write_text(json.dumps(state))
+    tmp_path = STATE_PATH.with_suffix(STATE_PATH.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(state))
+    tmp_path.replace(STATE_PATH)
+
+def remove_stale_charts():
+    for chart_path in CHART_FILES.values():
+        try:
+            chart_path.unlink()
+        except FileNotFoundError:
+            pass
 
 def generate_charts(prices, load, flows, primary_country, from_country, to_country):
     """Generate charts from the data and save them."""
@@ -392,29 +413,38 @@ def main(primary_country, from_country, to_country):
         if should_send:
             # Generate charts
             print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            remove_stale_charts()
+            charts_ok = generate_charts(prices, load, flows, primary_country, from_country, to_country)
             
             # Send text report first
             send_telegram(report, parse_mode="HTML")
             print("✅ Sent text report to Telegram")
             
             # Send charts
-            chart_files = [
-                ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"),
-                ("chart_load.png", f"⚡ Load Chart - {primary_country}"),
-                ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
-            ]
+            chart_files = []
+            if prices is not None and not prices.empty:
+                chart_files.append((CHART_FILES["prices"], f"📊 Price Chart - {primary_country}"))
+            if load is not None and not load.empty:
+                chart_files.append((CHART_FILES["load"], f"⚡ Load Chart - {primary_country}"))
+            if flows is not None and not flows.empty:
+                chart_files.append((CHART_FILES["flows"], f"🌍 Cross-Border Flows - {from_country} → {to_country}"))
             
-            for chart_file, caption in chart_files:
-                chart_path = Path(chart_file)
+            delivery_failed = not charts_ok
+            for chart_path, caption in chart_files:
                 if chart_path.exists():
                     try:
                         send_photo(str(chart_path), caption)
-                        print(f"✅ Sent {chart_file} to Telegram")
+                        print(f"✅ Sent {chart_path} to Telegram")
                     except Exception as e:
-                        print(f"⚠️  Failed to send {chart_file}: {e}")
+                        delivery_failed = True
+                        print(f"⚠️  Failed to send {chart_path}: {e}")
                 else:
+                    delivery_failed = True
                     print(f"⚠️  Chart not found: {chart_path}")
+
+            if delivery_failed:
+                print("⚠️  Not updating state; will retry this report on the next run")
+                return
             
             save_state({"price": latest_price, "ts": latest_ts})
             print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
