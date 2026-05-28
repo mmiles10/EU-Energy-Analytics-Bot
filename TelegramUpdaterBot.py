@@ -21,6 +21,11 @@ API_KEY = os.getenv("ENTSOE_API_KEY")
 COUNTRY_CODE = os.getenv("COUNTRY_CODE", "AT")  # Austria - change to 'BE', 'FR', 'DE', 'NL', etc.
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_SEC", "300"))
 STATE_PATH = Path("last_price_state.json")
+CHART_FILES = (
+    "chart_day_ahead_prices.png",
+    "chart_load.png",
+    "chart_crossborder_flows.png",
+)
 
 # Lazy-init: avoid crash at import when ENTSOE_API_KEY is missing (e.g. no .env yet).
 client = None
@@ -266,14 +271,28 @@ def create_comprehensive_report(prices, load, flows, primary_country, from_count
 
 def load_state():
     if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text())
+        try:
+            state = json.loads(STATE_PATH.read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return state if isinstance(state, dict) else {}
     return {}
 
 def save_state(state):
-    STATE_PATH.write_text(json.dumps(state))
+    tmp_path = STATE_PATH.with_suffix(STATE_PATH.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(state))
+    tmp_path.replace(STATE_PATH)
 
 def generate_charts(prices, load, flows, primary_country, from_country, to_country):
     """Generate charts from the data and save them."""
+    for chart_file in CHART_FILES:
+        try:
+            Path(chart_file).unlink()
+        except FileNotFoundError:
+            pass
+
+    generated_charts = []
+
     # Country name mapping
     country_names = {
         'AT': 'Austria', 'BE': 'Belgium', 'CH': 'Switzerland',
@@ -302,6 +321,7 @@ def generate_charts(prices, load, flows, primary_country, from_country, to_count
             plt.tight_layout()
             plt.savefig("chart_day_ahead_prices.png", dpi=150)
             plt.close()
+            generated_charts.append("chart_day_ahead_prices.png")
             print("✓ Generated price chart")
         
         # Load chart
@@ -316,6 +336,7 @@ def generate_charts(prices, load, flows, primary_country, from_country, to_count
             plt.tight_layout()
             plt.savefig("chart_load.png", dpi=150)
             plt.close()
+            generated_charts.append("chart_load.png")
             print("✓ Generated load chart")
         
         # Cross-border flows chart
@@ -332,12 +353,13 @@ def generate_charts(prices, load, flows, primary_country, from_country, to_count
             plt.tight_layout()
             plt.savefig("chart_crossborder_flows.png", dpi=150)
             plt.close()
+            generated_charts.append("chart_crossborder_flows.png")
             print("✓ Generated flows chart")
         
-        return True
+        return generated_charts
     except Exception as e:
         print(f"Error generating charts: {e}")
-        return False
+        return []
 
 def main(primary_country, from_country, to_country):
     if not API_KEY:
@@ -392,32 +414,35 @@ def main(primary_country, from_country, to_country):
         if should_send:
             # Generate charts
             print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            generated_charts = generate_charts(prices, load, flows, primary_country, from_country, to_country)
             
             # Send text report first
             send_telegram(report, parse_mode="HTML")
             print("✅ Sent text report to Telegram")
             
             # Send charts
-            chart_files = [
-                ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"),
-                ("chart_load.png", f"⚡ Load Chart - {primary_country}"),
-                ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
-            ]
+            chart_captions = {
+                "chart_day_ahead_prices.png": f"📊 Price Chart - {primary_country}",
+                "chart_load.png": f"⚡ Load Chart - {primary_country}",
+                "chart_crossborder_flows.png": f"🌍 Cross-Border Flows - {from_country} → {to_country}",
+            }
             
-            for chart_file, caption in chart_files:
+            all_charts_sent = bool(generated_charts)
+            for chart_file in generated_charts:
+                caption = chart_captions[chart_file]
                 chart_path = Path(chart_file)
-                if chart_path.exists():
-                    try:
-                        send_photo(str(chart_path), caption)
-                        print(f"✅ Sent {chart_file} to Telegram")
-                    except Exception as e:
-                        print(f"⚠️  Failed to send {chart_file}: {e}")
-                else:
-                    print(f"⚠️  Chart not found: {chart_path}")
+                try:
+                    send_photo(str(chart_path), caption)
+                    print(f"✅ Sent {chart_file} to Telegram")
+                except Exception:
+                    all_charts_sent = False
+                    print(f"⚠️  Failed to send {chart_file}")
             
-            save_state({"price": latest_price, "ts": latest_ts})
-            print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
+            if all_charts_sent:
+                save_state({"price": latest_price, "ts": latest_ts})
+                print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
+            else:
+                print("⚠️  Not saving state because one or more current charts were not delivered")
     else:
         print("Failed to create report")
 
