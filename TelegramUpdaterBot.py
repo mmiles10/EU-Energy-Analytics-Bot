@@ -276,7 +276,7 @@ def load_state():
     if STATE_PATH.exists():
         try:
             state = json.loads(STATE_PATH.read_text())
-        except (json.JSONDecodeError, OSError):
+        except (ValueError, OSError):
             return {}
         if isinstance(state, dict):
             return state
