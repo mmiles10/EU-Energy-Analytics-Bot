@@ -3,6 +3,9 @@ import time
 import json
 import requests
 import pandas as pd
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -21,6 +24,11 @@ API_KEY = os.getenv("ENTSOE_API_KEY")
 COUNTRY_CODE = os.getenv("COUNTRY_CODE", "AT")  # Austria - change to 'BE', 'FR', 'DE', 'NL', etc.
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_SEC", "300"))
 STATE_PATH = Path("last_price_state.json")
+CHART_FILES = [
+    ("chart_day_ahead_prices.png", "price"),
+    ("chart_load.png", "load"),
+    ("chart_crossborder_flows.png", "flows"),
+]
 
 # Lazy-init: avoid crash at import when ENTSOE_API_KEY is missing (e.g. no .env yet).
 client = None
@@ -266,14 +274,25 @@ def create_comprehensive_report(prices, load, flows, primary_country, from_count
 
 def load_state():
     if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text())
+        try:
+            state = json.loads(STATE_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            return {}
+        if isinstance(state, dict):
+            return state
     return {}
 
 def save_state(state):
-    STATE_PATH.write_text(json.dumps(state))
+    tmp_path = STATE_PATH.with_name(f".{STATE_PATH.name}.tmp")
+    tmp_path.write_text(json.dumps(state))
+    tmp_path.replace(STATE_PATH)
 
 def generate_charts(prices, load, flows, primary_country, from_country, to_country):
     """Generate charts from the data and save them."""
+    created_charts = []
+    for chart_file, _ in CHART_FILES:
+        Path(chart_file).unlink(missing_ok=True)
+
     # Country name mapping
     country_names = {
         'AT': 'Austria', 'BE': 'Belgium', 'CH': 'Switzerland',
@@ -302,6 +321,7 @@ def generate_charts(prices, load, flows, primary_country, from_country, to_count
             plt.tight_layout()
             plt.savefig("chart_day_ahead_prices.png", dpi=150)
             plt.close()
+            created_charts.append(("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"))
             print("✓ Generated price chart")
         
         # Load chart
@@ -316,6 +336,7 @@ def generate_charts(prices, load, flows, primary_country, from_country, to_count
             plt.tight_layout()
             plt.savefig("chart_load.png", dpi=150)
             plt.close()
+            created_charts.append(("chart_load.png", f"⚡ Load Chart - {primary_country}"))
             print("✓ Generated load chart")
         
         # Cross-border flows chart
@@ -332,12 +353,13 @@ def generate_charts(prices, load, flows, primary_country, from_country, to_count
             plt.tight_layout()
             plt.savefig("chart_crossborder_flows.png", dpi=150)
             plt.close()
+            created_charts.append(("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"))
             print("✓ Generated flows chart")
         
-        return True
+        return created_charts
     except Exception as e:
         print(f"Error generating charts: {e}")
-        return False
+        return None
 
 def main(primary_country, from_country, to_country):
     if not API_KEY:
@@ -348,7 +370,7 @@ def main(primary_country, from_country, to_country):
         print("You can get your chat ID by running: python send_telegram.py")
         return
     
-    print(f"Fetching energy data for {primary_country}... (Chat ID: {CHAT_ID})")
+    print(f"Fetching energy data for {primary_country}...")
     
     # Fetch all energy data with selected countries
     prices, load, flows = fetch_energy_data(primary_country, from_country, to_country)
@@ -392,32 +414,32 @@ def main(primary_country, from_country, to_country):
         if should_send:
             # Generate charts
             print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            generated_charts = generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            all_deliveries_succeeded = generated_charts is not None
             
             # Send text report first
             send_telegram(report, parse_mode="HTML")
             print("✅ Sent text report to Telegram")
             
             # Send charts
-            chart_files = [
-                ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"),
-                ("chart_load.png", f"⚡ Load Chart - {primary_country}"),
-                ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
-            ]
-            
-            for chart_file, caption in chart_files:
+            for chart_file, caption in generated_charts or []:
                 chart_path = Path(chart_file)
                 if chart_path.exists():
                     try:
                         send_photo(str(chart_path), caption)
                         print(f"✅ Sent {chart_file} to Telegram")
                     except Exception as e:
+                        all_deliveries_succeeded = False
                         print(f"⚠️  Failed to send {chart_file}: {e}")
                 else:
+                    all_deliveries_succeeded = False
                     print(f"⚠️  Chart not found: {chart_path}")
             
-            save_state({"price": latest_price, "ts": latest_ts})
-            print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
+            if all_deliveries_succeeded:
+                save_state({"price": latest_price, "ts": latest_ts})
+                print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
+            else:
+                print("⚠️  Telegram update incomplete; state not advanced so it can be retried")
     else:
         print("Failed to create report")
 
