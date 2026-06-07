@@ -474,7 +474,7 @@ def main(primary_country, from_country, to_country):
                 except Exception as e:
                     delivery_failed = True
                     print(f"⚠️  Failed to send {chart_file}: {describe_delivery_error(e)}")
-            
+
             if delivery_failed:
                 print("⚠️  One or more chart messages failed; state not updated so the next run can retry.")
                 return
