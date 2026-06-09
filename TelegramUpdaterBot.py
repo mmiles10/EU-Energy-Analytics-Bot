@@ -266,11 +266,30 @@ def create_comprehensive_report(prices, load, flows, primary_country, from_count
 
 def load_state():
     if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text())
+        try:
+            state = json.loads(STATE_PATH.read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return state if isinstance(state, dict) else {}
     return {}
 
 def save_state(state):
-    STATE_PATH.write_text(json.dumps(state))
+    temp_path = STATE_PATH.with_suffix(STATE_PATH.suffix + ".tmp")
+    temp_path.write_text(json.dumps(state))
+    temp_path.replace(STATE_PATH)
+
+def format_delivery_error(error):
+    message = str(error)
+    if TOKEN:
+        message = message.replace(TOKEN, "[REDACTED]")
+    return message
+
+def remove_stale_charts(chart_files):
+    for chart_file in chart_files:
+        try:
+            Path(chart_file).unlink()
+        except FileNotFoundError:
+            pass
 
 def generate_charts(prices, load, flows, primary_country, from_country, to_country):
     """Generate charts from the data and save them."""
@@ -390,32 +409,45 @@ def main(primary_country, from_country, to_country):
             print(f"No new data - not sending to Telegram (Latest price: {latest_price:.2f} €/MWh)")
         
         if should_send:
+            chart_files = [
+                ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}", prices is not None and not prices.empty),
+                ("chart_load.png", f"⚡ Load Chart - {primary_country}", load is not None and not load.empty),
+                ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}", flows is not None and not flows.empty),
+            ]
+            expected_charts = [(path, caption) for path, caption, enabled in chart_files if enabled]
+            remove_stale_charts([path for path, _caption, _enabled in chart_files])
+
             # Generate charts
             print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            charts_generated = generate_charts(prices, load, flows, primary_country, from_country, to_country)
             
             # Send text report first
-            send_telegram(report, parse_mode="HTML")
+            try:
+                send_telegram(report, parse_mode="HTML")
+            except Exception as e:
+                print(f"⚠️  Failed to send text report: {format_delivery_error(e)}")
+                return
             print("✅ Sent text report to Telegram")
             
             # Send charts
-            chart_files = [
-                ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"),
-                ("chart_load.png", f"⚡ Load Chart - {primary_country}"),
-                ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
-            ]
-            
-            for chart_file, caption in chart_files:
+            chart_delivery_ok = charts_generated
+            for chart_file, caption in expected_charts:
                 chart_path = Path(chart_file)
                 if chart_path.exists():
                     try:
                         send_photo(str(chart_path), caption)
                         print(f"✅ Sent {chart_file} to Telegram")
                     except Exception as e:
-                        print(f"⚠️  Failed to send {chart_file}: {e}")
+                        chart_delivery_ok = False
+                        print(f"⚠️  Failed to send {chart_file}: {format_delivery_error(e)}")
                 else:
+                    chart_delivery_ok = False
                     print(f"⚠️  Chart not found: {chart_path}")
             
+            if not chart_delivery_ok:
+                print("⚠️  Not updating state; chart delivery will be retried on the next run")
+                return
+
             save_state({"price": latest_price, "ts": latest_ts})
             print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
     else:
