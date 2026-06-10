@@ -1,4 +1,7 @@
 .env
+admin.txt
+admin.local.txt
+last_price_state.json
 __pycache__/
 
 day_ahead_prices.csv
