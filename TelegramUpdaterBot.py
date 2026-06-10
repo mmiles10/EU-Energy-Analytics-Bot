@@ -420,16 +420,16 @@ def main(primary_country, from_country, to_country):
             if not charts_generated or missing_charts:
                 missing = ", ".join(missing_charts) if missing_charts else "unknown chart generation error"
                 raise RuntimeError(f"Failed to generate expected chart(s): {missing}")
-            
+
             # Send text report first
             send_telegram(report, parse_mode="HTML")
             print("✅ Sent text report to Telegram")
-            
+
             for chart_file, caption in chart_files:
                 chart_path = Path(chart_file)
                 send_photo(str(chart_path), caption)
                 print(f"✅ Sent {chart_file} to Telegram")
-            
+
             save_state({"price": latest_price, "ts": latest_ts})
             print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
     else:
