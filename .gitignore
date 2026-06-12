@@ -1,5 +1,17 @@
 .env
+*.pyc
 __pycache__/
+.DS_Store
+
+# Personal notes and local secrets/state
+admin.txt
+admin.local.txt
+last_price_state.json
+
+# Local / vendored files that are not part of the bot
+EnergyScraper.py
+LegacyTerminal/
+INTERVIEW_TALKING_POINTS.md
 
 day_ahead_prices.csv
 generation_data.csv
