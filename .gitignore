@@ -1,6 +1,10 @@
 .env
 __pycache__/
 
+admin.txt
+admin.local.txt
+last_price_state.json
+
 day_ahead_prices.csv
 generation_data.csv
 load_data.csv
