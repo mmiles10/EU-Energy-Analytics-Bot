@@ -1,5 +1,17 @@
 .env
+*.pyc
 __pycache__/
+.DS_Store
+
+# Local secrets and runtime state must never be committed.
+admin.txt
+admin.local.txt
+last_price_state.json
+
+# Local-only files outside the ENTSO-E Telegram workflow.
+EnergyScraper.py
+LegacyTerminal/
+INTERVIEW_TALKING_POINTS.md
 
 day_ahead_prices.csv
 generation_data.csv
