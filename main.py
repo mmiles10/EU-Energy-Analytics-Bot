@@ -300,65 +300,6 @@ if __name__ == "__main__":
 
 
 
-        # --- Chart generation section ---
-    import matplotlib.pyplot as plt
-
-    print("\nGenerating charts...")
-
-    # Day-ahead prices
-    prices = pd.read_csv("day_ahead_prices.csv", index_col=0, parse_dates=True)
-    prices.plot(title="Day-Ahead Prices (EUR/MWh)")
-    plt.ylabel("EUR/MWh")
-    plt.tight_layout()
-    plt.savefig("chart_day_ahead_prices.png", dpi=150)
-    plt.close()
-
-    # Load
-    load = pd.read_csv("load_data.csv", index_col=0, parse_dates=True)
-    load.plot(title="System Load (MW)")
-    plt.ylabel("MW")
-    plt.tight_layout()
-    plt.savefig("chart_load.png", dpi=150)
-    plt.close()
-
-    # Cross-border flows
-    flows = pd.read_csv("crossborder_flows.csv", index_col=0, parse_dates=True)
-    flows.plot(title="Cross-Border Flows (MW)")
-    plt.ylabel("MW (positive = export from first zone)")
-    plt.tight_layout()
-    plt.savefig("chart_crossborder_flows.png", dpi=150)
-    plt.close()
-
-    # Generation mix (stacked area)
-    print("Creating generation mix chart...")
-    try:
-        gen = pd.read_csv("generation_data.csv", header=[0, 1], index_col=0)
-        
-        # The first column is already the timestamp index, so we can use it directly
-        gen.index = pd.to_datetime(gen.index)
-        
-        # Get only the "Actual Aggregated" columns
-        gen_actual = gen[[c for c in gen.columns if "Actual Aggregated" in str(c)]].copy()
-        gen_actual.columns = [c[0] for c in gen_actual.columns]
-        
-        # Create the stacked area chart
-        gen_actual.plot.area(title="Generation Mix – Actual Aggregated (MW)")
-        plt.ylabel("MW")
-        plt.tight_layout()
-        plt.savefig("chart_generation_mix.png", dpi=150)
-        plt.close()
-        print("✓ Generation mix chart saved")
-        
-    except Exception as e:
-        print(f"⚠️ Could not create generation mix chart: {e}")
-        print("Other charts will still be created")
-
-    print("✓ Charts saved as:")
-    print("  - chart_day_ahead_prices.png")
-    print("  - chart_load.png")
-    print("  - chart_crossborder_flows.png")
-    print("  - chart_generation_mix.png")
-
 def get_telegram_updates():
     """Get updates from Telegram bot API."""
     import requests
