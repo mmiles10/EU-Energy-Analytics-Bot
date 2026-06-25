@@ -132,6 +132,11 @@ def send_photo(photo_path: str, caption: str = ""):
         r = requests.post(url, files=files, data=data, timeout=30)
         r.raise_for_status()
 
+def _redact_token(message):
+    if TOKEN:
+        return str(message).replace(TOKEN, "[REDACTED]")
+    return str(message)
+
 def fetch_energy_data(primary_country, from_country, to_country):
     """Fetch all energy data from ENTSOE API."""
     global client
@@ -266,11 +271,19 @@ def create_comprehensive_report(prices, load, flows, primary_country, from_count
 
 def load_state():
     if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text())
+        try:
+            state = json.loads(STATE_PATH.read_text())
+            if isinstance(state, dict):
+                return state
+            print(f"Ignoring invalid state in {STATE_PATH}: expected object")
+        except (OSError, ValueError) as e:
+            print(f"Ignoring unreadable state in {STATE_PATH}: {e}")
     return {}
 
 def save_state(state):
-    STATE_PATH.write_text(json.dumps(state))
+    tmp_path = STATE_PATH.with_name(f"{STATE_PATH.name}.tmp")
+    tmp_path.write_text(json.dumps(state))
+    tmp_path.replace(STATE_PATH)
 
 def generate_charts(prices, load, flows, primary_country, from_country, to_country):
     """Generate charts from the data and save them."""
@@ -390,31 +403,49 @@ def main(primary_country, from_country, to_country):
             print(f"No new data - not sending to Telegram (Latest price: {latest_price:.2f} €/MWh)")
         
         if should_send:
-            # Generate charts
-            print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
-            
-            # Send text report first
-            send_telegram(report, parse_mode="HTML")
-            print("✅ Sent text report to Telegram")
-            
-            # Send charts
             chart_files = [
                 ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"),
                 ("chart_load.png", f"⚡ Load Chart - {primary_country}"),
                 ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
             ]
-            
+
+            # Remove stale chart artifacts so failed generation cannot resend old data.
+            for chart_file, _caption in chart_files:
+                Path(chart_file).unlink(missing_ok=True)
+
+            # Generate charts
+            print("Generating charts...")
+            if not generate_charts(prices, load, flows, primary_country, from_country, to_country):
+                print("Chart generation failed; state not updated so the report can be retried.")
+                return
+
+            missing_charts = [chart_file for chart_file, _caption in chart_files if not Path(chart_file).exists()]
+            if missing_charts:
+                print(f"Missing generated chart(s): {', '.join(missing_charts)}")
+                print("State not updated so the report can be retried.")
+                return
+
+            # Send text report first
+            try:
+                send_telegram(report, parse_mode="HTML")
+            except Exception as e:
+                print(f"Failed to send text report: {_redact_token(e)}")
+                print("State not updated so the report can be retried.")
+                return
+            print("✅ Sent text report to Telegram")
+
+            delivered_all_charts = True
             for chart_file, caption in chart_files:
                 chart_path = Path(chart_file)
-                if chart_path.exists():
-                    try:
-                        send_photo(str(chart_path), caption)
-                        print(f"✅ Sent {chart_file} to Telegram")
-                    except Exception as e:
-                        print(f"⚠️  Failed to send {chart_file}: {e}")
-                else:
-                    print(f"⚠️  Chart not found: {chart_path}")
+                try:
+                    send_photo(str(chart_path), caption)
+                    print(f"✅ Sent {chart_file} to Telegram")
+                except Exception as e:
+                    delivered_all_charts = False
+                    print(f"⚠️  Failed to send {chart_file}: {_redact_token(e)}")
+            if not delivered_all_charts:
+                print("State not updated because delivery was incomplete.")
+                return
             
             save_state({"price": latest_price, "ts": latest_ts})
             print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
