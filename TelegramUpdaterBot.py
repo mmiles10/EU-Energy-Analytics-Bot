@@ -439,7 +439,7 @@ def main(primary_country, from_country, to_country):
                 ("chart_load.png", f"⚡ Load Chart - {primary_country}"),
                 ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
             ]
-            
+
             all_charts_sent = True
             for chart_file, caption in chart_files:
                 chart_path = Path(chart_file)
@@ -453,11 +453,11 @@ def main(primary_country, from_country, to_country):
                 else:
                     print(f"⚠️  Chart not found: {chart_path}")
                     all_charts_sent = False
-            
+
             if not all_charts_sent:
                 print("⚠️  Not updating state because one or more charts were not delivered")
                 return
-            
+
             save_state({"price": latest_price, "ts": latest_ts})
             print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
     else:
