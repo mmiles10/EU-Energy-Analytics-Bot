@@ -21,6 +21,11 @@ API_KEY = os.getenv("ENTSOE_API_KEY")
 COUNTRY_CODE = os.getenv("COUNTRY_CODE", "AT")  # Austria - change to 'BE', 'FR', 'DE', 'NL', etc.
 CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL_SEC", "300"))
 STATE_PATH = Path("last_price_state.json")
+CHART_FILENAMES = (
+    "chart_day_ahead_prices.png",
+    "chart_load.png",
+    "chart_crossborder_flows.png",
+)
 
 # Lazy-init: avoid crash at import when ENTSOE_API_KEY is missing (e.g. no .env yet).
 client = None
@@ -119,7 +124,7 @@ def send_telegram(text: str, parse_mode="HTML"):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": parse_mode}
     r = requests.post(url, json=payload, timeout=15)
-    r.raise_for_status()
+    raise_for_telegram_status(r)
 
 def send_photo(photo_path: str, caption: str = ""):
     """Send a photo to Telegram."""
@@ -130,7 +135,13 @@ def send_photo(photo_path: str, caption: str = ""):
         files = {'photo': photo}
         data = {'chat_id': CHAT_ID, 'caption': caption, 'parse_mode': 'HTML'}
         r = requests.post(url, files=files, data=data, timeout=30)
-        r.raise_for_status()
+        raise_for_telegram_status(r)
+
+def raise_for_telegram_status(response):
+    """Raise without including the bot token URL in exception text."""
+    if response.status_code >= 400:
+        body = getattr(response, "text", "")
+        raise RuntimeError(f"Telegram API request failed with status {response.status_code}: {body}")
 
 def fetch_energy_data(primary_country, from_country, to_country):
     """Fetch all energy data from ENTSOE API."""
@@ -266,11 +277,27 @@ def create_comprehensive_report(prices, load, flows, primary_country, from_count
 
 def load_state():
     if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text())
+        try:
+            state = json.loads(STATE_PATH.read_text())
+        except (OSError, ValueError):
+            return {}
+        return state if isinstance(state, dict) else {}
     return {}
 
 def save_state(state):
-    STATE_PATH.write_text(json.dumps(state))
+    tmp_path = STATE_PATH.with_name(f"{STATE_PATH.name}.tmp")
+    tmp_path.write_text(json.dumps(state))
+    tmp_path.replace(STATE_PATH)
+
+def remove_existing_charts():
+    removed = True
+    for chart_file in CHART_FILENAMES:
+        try:
+            Path(chart_file).unlink(missing_ok=True)
+        except OSError as e:
+            print(f"⚠️  Failed to remove stale chart {chart_file}: {e}")
+            removed = False
+    return removed
 
 def generate_charts(prices, load, flows, primary_country, from_country, to_country):
     """Generate charts from the data and save them."""
@@ -386,13 +413,21 @@ def main(primary_country, from_country, to_country):
         elif last_ts != latest_ts:
             should_send = True
             print(f"New data available - sending update to Telegram")
+        elif last_price != latest_price:
+            should_send = True
+            print("Corrected price for latest timestamp - sending update to Telegram")
         else:
             print(f"No new data - not sending to Telegram (Latest price: {latest_price:.2f} €/MWh)")
         
         if should_send:
-            # Generate charts
+            # Generate fresh charts so an empty/missing series cannot reuse old PNGs.
             print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            if not remove_existing_charts():
+                print("⚠️  Could not remove stale charts - not updating state")
+                return
+            if not generate_charts(prices, load, flows, primary_country, from_country, to_country):
+                print("⚠️  Chart generation failed - not updating state")
+                return
             
             # Send text report first
             send_telegram(report, parse_mode="HTML")
@@ -405,6 +440,7 @@ def main(primary_country, from_country, to_country):
                 ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
             ]
             
+            all_charts_sent = True
             for chart_file, caption in chart_files:
                 chart_path = Path(chart_file)
                 if chart_path.exists():
@@ -413,8 +449,14 @@ def main(primary_country, from_country, to_country):
                         print(f"✅ Sent {chart_file} to Telegram")
                     except Exception as e:
                         print(f"⚠️  Failed to send {chart_file}: {e}")
+                        all_charts_sent = False
                 else:
                     print(f"⚠️  Chart not found: {chart_path}")
+                    all_charts_sent = False
+            
+            if not all_charts_sent:
+                print("⚠️  Not updating state because one or more charts were not delivered")
+                return
             
             save_state({"price": latest_price, "ts": latest_ts})
             print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
