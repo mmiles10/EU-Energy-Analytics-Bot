@@ -1,5 +1,7 @@
 .env
+*.pyc
 __pycache__/
+.DS_Store
 
 day_ahead_prices.csv
 generation_data.csv
@@ -12,3 +14,13 @@ chart_day_ahead_prices.png
 chart_load.png
 chart_crossborder_flows.png
 chart_generation_mix.png
+
+# Local / vendored - do not publish
+EnergyScraper.py
+LegacyTerminal/
+last_price_state.json
+INTERVIEW_TALKING_POINTS.md
+
+# Personal notes - never store API keys or tokens in tracked files
+admin.txt
+admin.local.txt
