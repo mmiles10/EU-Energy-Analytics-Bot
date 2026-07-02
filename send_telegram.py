@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -104,5 +105,4 @@ Send /start to receive regular energy reports.
         print("4. Run this script again")
 
 if __name__ == "__main__":
-    from datetime import datetime
     main()
