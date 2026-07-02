@@ -1,5 +1,7 @@
 import ast
+import contextlib
 import importlib.util
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -77,7 +79,8 @@ class CriticalRegressionTests(unittest.TestCase):
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
 
-            self.assertEqual(module.get_chat_id(), 12345)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(module.get_chat_id(), 12345)
         finally:
             sys.modules.pop(module_name, None)
             if old_requests is None:
