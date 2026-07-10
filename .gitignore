@@ -5,6 +5,7 @@ __pycache__/
 admin.txt
 admin.local.txt
 last_price_state.json
+last_price_state.json.tmp
 
 day_ahead_prices.csv
 generation_data.csv
