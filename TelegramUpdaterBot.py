@@ -119,7 +119,18 @@ def send_telegram(text: str, parse_mode="HTML"):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     payload = {"chat_id": CHAT_ID, "text": text, "parse_mode": parse_mode}
     r = requests.post(url, json=payload, timeout=15)
-    r.raise_for_status()
+    raise_for_telegram_status(r)
+
+def raise_for_telegram_status(response):
+    try:
+        response.raise_for_status()
+    except requests.HTTPError:
+        response_text = response.text
+        if TOKEN:
+            response_text = response_text.replace(TOKEN, "[redacted]")
+        raise RuntimeError(
+            f"Telegram API request failed with status {response.status_code}: {response_text}"
+        ) from None
 
 def send_photo(photo_path: str, caption: str = ""):
     """Send a photo to Telegram."""
@@ -130,7 +141,7 @@ def send_photo(photo_path: str, caption: str = ""):
         files = {'photo': photo}
         data = {'chat_id': CHAT_ID, 'caption': caption, 'parse_mode': 'HTML'}
         r = requests.post(url, files=files, data=data, timeout=30)
-        r.raise_for_status()
+        raise_for_telegram_status(r)
 
 def fetch_energy_data(primary_country, from_country, to_country):
     """Fetch all energy data from ENTSOE API."""
@@ -266,11 +277,41 @@ def create_comprehensive_report(prices, load, flows, primary_country, from_count
 
 def load_state():
     if STATE_PATH.exists():
-        return json.loads(STATE_PATH.read_text())
+        try:
+            state = json.loads(STATE_PATH.read_text())
+        except (OSError, ValueError):
+            return {}
+        if isinstance(state, dict):
+            return state
     return {}
 
 def save_state(state):
-    STATE_PATH.write_text(json.dumps(state))
+    temp_path = STATE_PATH.with_name(f"{STATE_PATH.name}.tmp")
+    temp_path.write_text(json.dumps(state))
+    temp_path.replace(STATE_PATH)
+
+def has_data(series_or_frame):
+    return series_or_frame is not None and not getattr(series_or_frame, "empty", False)
+
+def expected_chart_files(load, flows, primary_country, from_country, to_country):
+    chart_files = [
+        ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"),
+    ]
+    if has_data(load):
+        chart_files.append(("chart_load.png", f"⚡ Load Chart - {primary_country}"))
+    if has_data(flows):
+        chart_files.append(
+            ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}")
+        )
+    return chart_files
+
+def remove_chart_files(chart_files):
+    for chart_file, _caption in chart_files:
+        chart_path = Path(chart_file)
+        try:
+            chart_path.unlink()
+        except FileNotFoundError:
+            pass
 
 def generate_charts(prices, load, flows, primary_country, from_country, to_country):
     """Generate charts from the data and save them."""
@@ -390,32 +431,31 @@ def main(primary_country, from_country, to_country):
             print(f"No new data - not sending to Telegram (Latest price: {latest_price:.2f} €/MWh)")
         
         if should_send:
+            chart_files = expected_chart_files(load, flows, primary_country, from_country, to_country)
+            remove_chart_files(chart_files)
+
             # Generate charts
             print("Generating charts...")
-            generate_charts(prices, load, flows, primary_country, from_country, to_country)
-            
+            charts_ok = generate_charts(prices, load, flows, primary_country, from_country, to_country)
+            missing_charts = [
+                chart_file for chart_file, _caption in chart_files if not Path(chart_file).exists()
+            ]
+            if not charts_ok or missing_charts:
+                raise RuntimeError(
+                    "Chart generation failed; not sending report or advancing state. "
+                    f"Missing charts: {', '.join(missing_charts) or 'none'}"
+                )
+
             # Send text report first
             send_telegram(report, parse_mode="HTML")
             print("✅ Sent text report to Telegram")
-            
-            # Send charts
-            chart_files = [
-                ("chart_day_ahead_prices.png", f"📊 Price Chart - {primary_country}"),
-                ("chart_load.png", f"⚡ Load Chart - {primary_country}"),
-                ("chart_crossborder_flows.png", f"🌍 Cross-Border Flows - {from_country} → {to_country}"),
-            ]
-            
+
+            # Send charts. Any delivery failure must prevent state advancement so the
+            # next run can retry the full report.
             for chart_file, caption in chart_files:
-                chart_path = Path(chart_file)
-                if chart_path.exists():
-                    try:
-                        send_photo(str(chart_path), caption)
-                        print(f"✅ Sent {chart_file} to Telegram")
-                    except Exception as e:
-                        print(f"⚠️  Failed to send {chart_file}: {e}")
-                else:
-                    print(f"⚠️  Chart not found: {chart_path}")
-            
+                send_photo(chart_file, caption)
+                print(f"✅ Sent {chart_file} to Telegram")
+
             save_state({"price": latest_price, "ts": latest_ts})
             print(f"✅ All messages sent to Telegram (Latest price: {latest_price:.2f} €/MWh)")
     else:
