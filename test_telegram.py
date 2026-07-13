@@ -2,7 +2,12 @@ import os
 import requests
 import json
 from datetime import datetime
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv():
+        return None
 
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
