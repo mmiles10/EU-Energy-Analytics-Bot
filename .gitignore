@@ -1,6 +1,12 @@
 .env
 __pycache__/
 
+# Local secrets and runtime state
+admin.txt
+admin.local.txt
+last_price_state.json
+last_price_state.json.tmp
+
 day_ahead_prices.csv
 generation_data.csv
 load_data.csv
@@ -12,3 +18,8 @@ chart_day_ahead_prices.png
 chart_load.png
 chart_crossborder_flows.png
 chart_generation_mix.png
+
+# Local scratch/reference files outside the maintained bot
+EnergyScraper.py
+LegacyTerminal/
+INTERVIEW_TALKING_POINTS.md
