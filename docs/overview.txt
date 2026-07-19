@@ -59,7 +59,7 @@ send_telegram.py
 
 test_telegram.py
 - Connection testing
-- Chat ID: 8466265605
+- Chat ID: set with TELEGRAM_CHAT_ID locally
 - Bot token integration
 
 send_energy_report.py
