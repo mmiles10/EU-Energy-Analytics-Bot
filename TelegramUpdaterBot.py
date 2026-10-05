@@ -132,6 +132,33 @@ def send_photo(photo_path: str, caption: str = ""):
         r = requests.post(url, files=files, data=data, timeout=30)
         r.raise_for_status()
 
+def _series_missing_or_zero(series):
+    """True when a flow series is absent or has no non-zero observations."""
+    if series is None:
+        return True
+    try:
+        if series.empty:
+            return True
+        return bool(series.abs().max() == 0)
+    except Exception:
+        return True
+
+
+def _query_crossborder_flows(client, origin, dest, start, end):
+    """Query one border direction. Missing data is not a failed price fetch."""
+    try:
+        flows = client.query_crossborder_flows(origin, dest, start=start, end=end)
+    except Exception as e:
+        print(f"Cross-border flow {origin}→{dest} unavailable: {e}")
+        return None
+    if flows is None:
+        return None
+    try:
+        return flows.dropna()
+    except Exception:
+        return flows
+
+
 def fetch_energy_data(primary_country, from_country, to_country):
     """Fetch all energy data from ENTSOE API."""
     global client
@@ -144,36 +171,37 @@ def fetch_energy_data(primary_country, from_country, to_country):
     now = pd.Timestamp.now(tz='Europe/Brussels')
     start = (now - pd.Timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     end = now
-    
+
     try:
-        # Fetch prices
         prices = client.query_day_ahead_prices(primary_country, start=start, end=end).dropna()
-        
-        # Fetch load data
-        load = client.query_load(primary_country, start=start, end=end)
-        
-        # Fetch cross-border flows (from_country -> to_country; positive = export from from_country)
-        flows = client.query_crossborder_flows(from_country, to_country, start=start, end=end).dropna()
-        # ENTSO-E publishes some borders only in one direction (e.g. CH–DE_LU). If we get empty or all zeros, try reverse and negate.
-        try:
-            all_zero = flows is None or flows.empty or (not flows.empty and flows.abs().max() == 0)
-        except Exception:
-            all_zero = True
-        if all_zero:
-            try:
-                flows_reverse = client.query_crossborder_flows(to_country, from_country, start=start, end=end).dropna()
-                if flows_reverse is not None and not flows_reverse.empty and flows_reverse.abs().max() != 0:
-                    flows = -flows_reverse.astype(float)  # positive = export from from_country
-                    print("✓ Cross-border flow: using reverse direction (API publishes to→from)")
-            except Exception:
-                pass
-        if flows is not None and not flows.empty:
-            flows = flows.astype(float)
-        
-        return prices, load, flows
     except Exception as e:
-        print(f"Error fetching energy data: {e}")
+        print(f"Error fetching day-ahead prices: {e}")
         return None, None, None
+
+    try:
+        load = client.query_load(primary_country, start=start, end=end)
+    except Exception as e:
+        print(f"Load data unavailable: {e}")
+        load = None
+
+    # ENTSO-E publishes some borders only in one direction (e.g. CH–DE_LU).
+    # entsoe-py raises NoMatchingDataError for that direction instead of
+    # returning an empty series, so a failed forward query must still try
+    # the reverse direction and must not discard prices already fetched.
+    flows = _query_crossborder_flows(client, from_country, to_country, start, end)
+    if _series_missing_or_zero(flows):
+        flows_reverse = _query_crossborder_flows(client, to_country, from_country, start, end)
+        if not _series_missing_or_zero(flows_reverse):
+            flows = -flows_reverse.astype(float)  # positive = export from from_country
+            print("✓ Cross-border flow: using reverse direction (API publishes to→from)")
+    if flows is not None:
+        try:
+            if not flows.empty:
+                flows = flows.astype(float)
+        except Exception:
+            pass
+
+    return prices, load, flows
 
 def create_comprehensive_report(prices, load, flows, primary_country, from_country, to_country):
     """Create a comprehensive energy trading report."""
